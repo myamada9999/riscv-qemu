@@ -55,7 +55,11 @@ int riscv_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
 static int riscv_gdb_get_fpu(CPURISCVState *env, uint8_t *mem_buf, int n)
 {
     if (n < 32) {
+#if defined(TARGET_RISCV32)
+        return gdb_get_reg32(mem_buf, env->fpr[n]);
+#elif defined(TARGET_RISCV64)
         return gdb_get_reg64(mem_buf, env->fpr[n]);
+#endif
     }
     return 0;
 }
@@ -63,8 +67,13 @@ static int riscv_gdb_get_fpu(CPURISCVState *env, uint8_t *mem_buf, int n)
 static int riscv_gdb_set_fpu(CPURISCVState *env, uint8_t *mem_buf, int n)
 {
     if (n < 32) {
+#if defined(TARGET_RISCV32)
+        env->fpr[n] = ldl_p(mem_buf);
+        return sizeof(uint32_t);
+#elif defined(TARGET_RISCV64)
         env->fpr[n] = ldq_p(mem_buf); /* always 64-bit */
         return sizeof(uint64_t);
+#endif
     }
     return 0;
 }
@@ -93,10 +102,19 @@ static int riscv_gdb_set_csr(CPURISCVState *env, uint8_t *mem_buf, int n)
 
 void riscv_cpu_register_gdb_regs_for_features(CPUState *cs)
 {
+#if defined(TARGET_RISCV32)
+    /* ??? Assume all targets have FPU regs for now.  */
+    gdb_register_coprocessor(cs, riscv_gdb_get_fpu, riscv_gdb_set_fpu,
+                             32, "riscv-32bit-fpu.xml", 0);
+
+    gdb_register_coprocessor(cs, riscv_gdb_get_csr, riscv_gdb_set_csr,
+                             4096, "riscv-32bit-csr.xml", 0);
+#elif defined(TARGET_RISCV64)
     /* ??? Assume all targets have FPU regs for now.  */
     gdb_register_coprocessor(cs, riscv_gdb_get_fpu, riscv_gdb_set_fpu,
                              32, "riscv-fpu.xml", 0);
 
     gdb_register_coprocessor(cs, riscv_gdb_get_csr, riscv_gdb_set_csr,
                              4096, "riscv-csr.xml", 0);
+#endif
 }
